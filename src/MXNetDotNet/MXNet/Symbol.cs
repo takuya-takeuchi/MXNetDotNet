@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using MXNetDotNet.Interop;
 using mx_uint = System.UInt32;
+using SymbolHandle = System.IntPtr;
 
 // ReSharper disable once CheckNamespace
 namespace MXNetDotNet
@@ -12,7 +13,18 @@ namespace MXNetDotNet
     public sealed class Symbol : DisposableMXNetObject
     {
 
+        #region Fields
+
+        private static readonly OpMap OpMap;
+
+        #endregion
+
         #region Constructors
+
+        static Symbol()
+        {
+            OpMap = new OpMap();
+        }
 
         public Symbol()
             : this(IntPtr.Zero)
@@ -31,6 +43,39 @@ namespace MXNetDotNet
 
             this.NativePtr = @out;
         }
+
+        //public Symbol(string operatorName, 
+        //              string name,
+        //              IList<string> inputKeys,
+        //              IList<SymbolHandle> inputValues,
+        //              IList<string> configKeys,
+        //              IList<string> configValues)
+        //{
+        //    if (inputKeys == null)
+        //        throw new ArgumentNullException(nameof(inputKeys));
+        //    if (inputValues == null)
+        //        throw new ArgumentNullException(nameof(inputValues));
+        //    if (configKeys == null)
+        //        throw new ArgumentNullException(nameof(configKeys));
+        //    if (configValues == null)
+        //        throw new ArgumentNullException(nameof(configValues));
+
+        //    var creator = OpMap.GetSymbolCreator(operatorName);
+        //    NativeMethods.MXSymbolCreateAtomicSymbol(creator, 
+        //                                             (uint)configKeys.Count,
+        //                                             configKeys.ToArray(),
+        //                                             configValues.ToArray(),
+        //                                             out var handle);
+
+        //    NativeMethods.MXSymbolCompose(handle, 
+        //                                  operatorName,
+        //                                  (uint)inputKeys.Count,
+        //                                  inputKeys.ToArray(),
+        //                                  inputValues.ToArray());
+
+        //    blob_ptr_ = std::make_shared<SymBlob>(handle);
+        //    this.NativePtr = @out;
+        //}
 
         #endregion
 
@@ -83,6 +128,69 @@ namespace MXNetDotNet
         #endregion
 
         #region Methods
+
+        public Executor Bind(Context context,
+                             IList<NDArray> argArrays,
+                             IList<NDArray> gradArrays,
+                             IList<OpReqType> gradReqs,
+                             IList<NDArray> auxArrays)
+        {
+            return new Executor(this,
+                                context,
+                                argArrays,
+                                gradArrays,
+                                gradReqs,
+                                auxArrays,
+                                new Dictionary<string, Context>());
+        }
+
+        public Executor Bind(Context context,
+                             IList<NDArray> argArrays,
+                             IList<NDArray> gradArrays,
+                             IList<OpReqType> gradReqs,
+                             IList<NDArray> auxArrays,
+                             IDictionary<string, Context> groupToCtx)
+        {
+            return new Executor(this,
+                                context,
+                                argArrays,
+                                gradArrays,
+                                gradReqs,
+                                auxArrays,
+                                groupToCtx,
+                                null);
+        }
+
+        public Executor Bind(Context context,
+                             IList<NDArray> argArrays,
+                             IList<NDArray> gradArrays,
+                             IList<OpReqType> gradReqs,
+                             IList<NDArray> auxArrays,
+                             IDictionary<string, Context> groupToCtx,
+                             Executor sharedExec)
+        {
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+            if (argArrays == null)
+                throw new ArgumentNullException(nameof(argArrays));
+            if (gradArrays == null)
+                throw new ArgumentNullException(nameof(gradArrays));
+            if (gradReqs == null)
+                throw new ArgumentNullException(nameof(gradReqs));
+            if (auxArrays == null)
+                throw new ArgumentNullException(nameof(auxArrays));
+            if (groupToCtx == null)
+                throw new ArgumentNullException(nameof(groupToCtx));
+
+            return new Executor(this,
+                                context,
+                                argArrays,
+                                gradArrays,
+                                gradReqs,
+                                auxArrays,
+                                groupToCtx,
+                                sharedExec);
+        }
 
         public IntPtr GetHandle()
         {
