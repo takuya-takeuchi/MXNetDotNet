@@ -609,6 +609,11 @@ namespace MXNetDotNet
             return OperatorSupply.PlusScalar(lhs, scalar);
         }
 
+        public static Symbol operator +(float lhs, Symbol rhs)
+        {
+            return rhs + lhs;
+        }
+
         public static Symbol operator -(Symbol lhs, float scalar)
         {
             if (lhs == null)
@@ -617,6 +622,16 @@ namespace MXNetDotNet
             lhs.ThrowIfDisposed();
 
             return OperatorSupply.MinimumScalar(lhs, scalar);
+        }
+
+        public static Symbol operator -(float lhs, Symbol rhs)
+        {
+            if (rhs == null)
+                throw new ArgumentNullException(nameof(rhs));
+
+            rhs.ThrowIfDisposed();
+
+            return OperatorSupply.RMinusScalar(lhs, rhs);
         }
 
         public static Symbol operator *(Symbol lhs, float scalar)
@@ -629,6 +644,11 @@ namespace MXNetDotNet
             return OperatorSupply.MulScalar(lhs, scalar);
         }
 
+        public static Symbol operator *(float lhs, Symbol rhs)
+        {
+            return rhs * lhs;
+        }
+
         public static Symbol operator /(Symbol lhs, float scalar)
         {
             if (lhs == null)
@@ -639,6 +659,16 @@ namespace MXNetDotNet
             return OperatorSupply.DivScalar(lhs, scalar);
         }
 
+        public static Symbol operator /(float lhs, Symbol rhs)
+        {
+            if (rhs == null)
+                throw new ArgumentNullException(nameof(rhs));
+
+            rhs.ThrowIfDisposed();
+
+            return OperatorSupply.RDivScalar(lhs, rhs);
+        }
+
         public static Symbol operator %(Symbol lhs, float scalar)
         {
             if (lhs == null)
@@ -647,6 +677,16 @@ namespace MXNetDotNet
             lhs.ThrowIfDisposed();
 
             return OperatorSupply.ModScalar(lhs, scalar);
+        }
+
+        public static Symbol operator %(float lhs, Symbol rhs)
+        {
+            if (rhs == null)
+                throw new ArgumentNullException(nameof(rhs));
+
+            rhs.ThrowIfDisposed();
+
+            return OperatorSupply.RModScalar(lhs, rhs);
         }
 
         #endregion
