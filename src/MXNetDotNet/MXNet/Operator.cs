@@ -111,7 +111,8 @@ namespace MXNetDotNet
 
             Logging.CHECK_EQ(NativeMethods.MXSymbolCreateAtomicSymbol(this._Handle,
                                                                       (uint)paramKeys.Length,
-                                                                      paramKeys, paramValues,
+                                                                      paramKeys,
+                                                                      paramValues,
                                                                       out var symbolHandle), NativeMethods.OK);
 
             Logging.CHECK_EQ(NativeMethods.MXSymbolCompose(symbolHandle,
