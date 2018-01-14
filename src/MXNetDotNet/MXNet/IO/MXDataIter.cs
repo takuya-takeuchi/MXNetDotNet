@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using MXNetDotNet.Extensions;
 using MXNetDotNet.Interop;
 using mx_float = System.Single;
@@ -52,20 +53,28 @@ namespace MXNetDotNet
         public MXDataIter CreateDataIter()
         {
             var keys = this._Params.Keys.ToArray();
-            var param_keys = new string[keys.Length];
-            var param_values = new string[keys.Length];
+            var paramKeys = new string[keys.Length];
+            var paramValues = new string[keys.Length];
             for (var i = 0; i < keys.Length; i++)
             {
                 var key = keys[i];
-                param_keys[i] = key;
-                param_values[i] = this._Params[key];
+                paramKeys[i] = key;
+                paramValues[i] = this._Params[key];
             }
 
             NativeMethods.MXDataIterCreateIter(this._Creator,
-                                               (uint)param_keys.Length,
-                                               param_keys,
-                                               param_values,
+                                               (uint)paramKeys.Length,
+                                               paramKeys,
+                                               paramValues,
                                                out var @out);
+
+            if (@out == IntPtr.Zero)
+            {
+                var error = NativeMethods.MXGetLastError();
+                var innerMessage = Marshal.PtrToStringAnsi(error);
+                throw new MXNetException($"Failed to create DataIter: {innerMessage}");
+            }
+
             this._BlobPtr.Handle = @out;
 
             return this;
@@ -108,12 +117,12 @@ namespace MXNetDotNet
 
         public override int[] GetIndex()
         {
-            var r = NativeMethods.MXDataIterGetIndex(this._BlobPtr.Handle, out var out_index, out var out_size);
+            var r = NativeMethods.MXDataIterGetIndex(this._BlobPtr.Handle, out var outIndex, out var outSize);
             Logging.CHECK_EQ(r, 0);
 
-            var outIndexArray = InteropHelper.ToUInt64Array(out_index, (uint)out_size);
-            var ret = new int[out_size];
-            for (var i = 0ul; i < out_size; ++i)
+            var outIndexArray = InteropHelper.ToUInt64Array(outIndex, (uint)outSize);
+            var ret = new int[outSize];
+            for (var i = 0ul; i < outSize; ++i)
                 ret[i] = (int)outIndexArray[i];
 
             return ret;
@@ -135,7 +144,7 @@ namespace MXNetDotNet
 
         public override bool Next()
         {
-            int r = NativeMethods.MXDataIterNext(this._BlobPtr.Handle, out var @out);
+            var r = NativeMethods.MXDataIterNext(this._BlobPtr.Handle, out var @out);
             Logging.CHECK_EQ(r, 0);
             return @out > 0;
         }

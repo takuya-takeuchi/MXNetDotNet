@@ -24,6 +24,7 @@ namespace MXNetDotNet
             MXNETCPP_REGISTER_OPTIMIZER<AdamOptimizer>("adam");
             MXNETCPP_REGISTER_OPTIMIZER<AdaGradOptimizer>("adagrad");
             MXNETCPP_REGISTER_OPTIMIZER<AdaDeltaOptimizer>("adadelta");
+            MXNETCPP_REGISTER_OPTIMIZER<SignumOptimizer>("signum");
 
             return !cmap.TryGetValue(name, out var value) ? null : value.Invoke();
         }

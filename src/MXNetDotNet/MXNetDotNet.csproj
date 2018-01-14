@@ -2,6 +2,18 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <Authors>Takuya Takeuchi</Authors>
+    <Description>.NET wrapper for Apache MXNet written in C#</Description>
+    <Copyright>Takuya Takeuchi</Copyright>
+    <Version>1.0.0.0</Version>
+    <PackageReleaseNotes>1.0.0.20180113</PackageReleaseNotes>
+    <PackageProjectUrl>https://github.com/takuya-takeuchi/MXNetDotNet</PackageProjectUrl>
+    <PackageLicenseUrl>http://opensource.org/licenses/MIT</PackageLicenseUrl>
+    <RepositoryUrl>https://github.com/takuya-takeuchi/MXNetDotNet</RepositoryUrl>
+    <PackageId>MXNet.Net</PackageId>
+    <Product>MXNet.Net</Product>
+    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
