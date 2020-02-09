@@ -1,9 +1,16 @@
 [submodule "incubator-mxnet"]
-	path = incubator-mxnet
+	path = src/incubator-mxnet
 	url = https://github.com/apache/incubator-mxnet.git
+    ignore = dirty
 [submodule "example/SSD/mxnet"]
 	path = example/SSD/mxnet
 	url = https://github.com/zhreshold/mxnet.git
+    ignore = dirty
 [submodule "example/YOLOv2/mxnet"]
 	path = example/YOLOv2/mxnet
 	url = https://github.com/zhreshold/mxnet.git
+    ignore = dirty
+[submodule "src/opencv"]
+	path = src/opencv
+	url = https://github.com/opencv/opencv
+    ignore = dirty
