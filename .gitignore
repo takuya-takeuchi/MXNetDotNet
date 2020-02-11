@@ -329,3 +329,9 @@ __pycache__/
 # should be stored in the .pubxml.user file.
 
 # End of https://www.gitignore.io/api/visualstudio,visualstudiocode
+
+# custom
+src/libmxnet/build_*/
+src/opencv
+src/openblas
+src/mingw64
