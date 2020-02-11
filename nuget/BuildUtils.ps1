@@ -777,6 +777,7 @@ function CopyToArtifact()
    else
    {
       $binary = Join-Path ${srcDir} ${build}  | `
+               Join-Path -ChildPath "incubator-mxnet" | ` 
                Join-Path -ChildPath ${libraryName}
    }
 

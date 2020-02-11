@@ -5,6 +5,7 @@ LABEL maintainer "Takuya Takeuchi <takuya.takeuchi.dev@gmail.com>"
 RUN apt-get update && apt-get install -y \
     build-essential \
     libopenblas-dev \
+    liblapack-dev \
     libx11-dev \
     libjemalloc-dev \
     libgtest-dev \
@@ -38,3 +39,17 @@ RUN apt-get update && apt-get install -y \
 
 # change default python
 RUN ln -s /usr/bin/python3 /usr/bin/python
+
+# install llvm
+ENV LLVM_VERSION 9
+RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
+RUN apt-get update && apt-get install -y \
+    software-properties-common \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN add-apt-repository "deb http://apt.llvm.org/xenial/   llvm-toolchain-xenial-${LLVM_VERSION}  main"
+RUN apt-get update && apt-get install -y \
+    clang-$LLVM_VERSION \
+    lldb-$LLVM_VERSION \
+    lld-$LLVM_VERSION \
+    clangd-$LLVM_VERSION \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
