@@ -1,6 +1,6 @@
 # MXNetDotNet [![GitHub license](https://img.shields.io/github/license/mashape/apistatus.svg)]()
 
-Apache MXNet wrapper written in C# for Windows, MacOS and Linux
+Apache MXNet wrapper written in C# for Windows, MacOS and Linux  
 MXNetDotNet is thin wrapper and similar with original MXNet. So you need not to suffer from complex C/C++ syntax!!
 
 ## Dependencies Libraries and Products
