@@ -48,25 +48,25 @@ class Config
    }
 
    $VisualStudio = "Visual Studio 15 2017"
-   
-   static $BuildLibraryWindowsHash = 
+
+   static $BuildLibraryWindowsHash =
    @{
-      "libmxnet"     = "libmxnet.dll";
+      "libmxnet" = "libmxnet.dll";
    }
-   
-   static $BuildLibraryLinuxHash = 
+
+   static $BuildLibraryLinuxHash =
    @{
-      "libmxnet"     = "libmxnet.so";
+      "libmxnet" = "libmxnet.so";
    }
-   
-   static $BuildLibraryOSXHash = 
+
+   static $BuildLibraryOSXHash =
    @{
-      "libmxnet"     = "libmxnet.dylib";
+      "libmxnet" = "libmxnet.dylib";
    }
-   
-   static $BuildLibraryIOSHash = 
+
+   static $BuildLibraryIOSHash =
    @{
-      "libmxnet"     = "libmxnet.a";
+      "libmxnet" = "libmxnet.a";
    }
 
    [string]   $_Root
@@ -217,6 +217,18 @@ class Config
                Join-Path -ChildPath opencv
    }
 
+   [string] GetOpenBLASRootDir()
+   {
+      return   Join-Path $this.GetRootDir() src |
+               Join-Path -ChildPath openblas
+   }
+
+   [string] GetMingw64RootDir()
+   {
+      return   Join-Path $this.GetRootDir() src |
+               Join-Path -ChildPath mingw64
+   }
+
    [string] GetNugetDir()
    {
       return   Join-Path $this.GetRootDir() nuget
@@ -353,7 +365,7 @@ class Config
       {
          $osname = $this.GetOSName()
       }
-      
+
       $target = $this._Target
       $platform = $this._Platform
       $architecture = $this.GetArchitectureName()
@@ -378,7 +390,7 @@ class Config
    {
       $architecture = $this._Architecture
       $target = $this._Target
-      
+
       if ($target -eq "arm")
       {
          if ($architecture -eq 32)
@@ -413,10 +425,21 @@ class Config
       # CUDA_PATH_V9_0=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v9.0
       # CUDA_PATH_V9_1=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v9.1
       # CUDA_PATH_V9_2=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v9.2
-      $version = $this.CudaVersionHash[$this._CudaVersion]      
+      $version = $this.CudaVersionHash[$this._CudaVersion]
       return [environment]::GetEnvironmentVariable($version, 'Machine')
    }
 
+}
+
+function CallVisualStudioDeveloperConsole()
+{
+   cmd.exe /c "call `"C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat`" && set > %temp%\vcvars.txt"
+
+   Get-Content "${env:temp}\vcvars.txt" | Foreach-Object {
+      if ($_ -match "^(.*?)=(.*)$") {
+        Set-Content "env:\$($matches[1])" $matches[2]
+      }
+    }
 }
 
 class ThirdPartyBuilder
@@ -427,6 +450,112 @@ class ThirdPartyBuilder
    ThirdPartyBuilder( [Config]$Config )
    {
       $this._Config = $Config
+   }
+
+   [Void] CopyBinaryForOpWrapperGenerator( [string]$openCVDir,
+                                           [string]$openBLASDir,
+                                           [string]$mingw64Dir )
+   {
+      Write-Host "Start Copy libraries for OpWrapperGenerator.py" -ForegroundColor Green
+
+      # get root directory of incubator-mxnet
+      $rootDir = $this._Config.GetMXNetRootDir()
+
+      $scriptsDir = Join-Path ${rootDir} "cpp-package" | `
+                    Join-Path -ChildPath "scripts"
+      
+      # opencv_worldXXX.dll
+      Copy-Item ${openCVDir}\x64\vc15\bin\*.dll ${scriptsDir}
+      
+      # libopenblas.dll
+      Copy-Item ${openBLASDir}\bin\*.dll ${scriptsDir}
+
+      # libgcc_s_seh-1.dll
+      # libgfortran-3.dll
+      # libquadmath-0.dll
+      Copy-Item ${mingw64Dir}\mingw64_dll\*.dll ${scriptsDir}
+
+      Write-Host "End Copy libraries for OpWrapperGenerator.py" -ForegroundColor Green
+   }
+
+   [string] BuildMingw64()
+   {
+      $ret = ""
+      $current = Get-Location
+
+      try
+      {
+         if ($global:IsWindows)
+         {
+            $mingw64Version = "0.2.15"
+            $filename = "mingw64_dll.zip"
+            $url = "https://svwh.dl.sourceforge.net/project/openblas/v${mingw64Version}/${filename}"
+
+            Write-Host "Start Download Mingw64 from ${url}" -ForegroundColor Green
+
+            $mingw64Dir = $this._Config.GetMingw64RootDir()
+            if ((Test-Path $mingw64Dir) -eq $False)
+            {
+               New-Item $mingw64Dir -ItemType Directory
+            }
+
+            $zipfile = Join-Path $mingw64Dir $filename
+            if ((Test-Path $zipfile) -eq $False)
+            {
+               Invoke-WebRequest -Uri $url -OutFile $zipfile -UserAgent "Mozilla/5.0 (Windows NT; Windows NT 6.2; ja-JP) WindowsPowerShell/4.0"
+            }
+            Expand-Archive -Path $zipfile -DestinationPath $mingw64Dir
+
+            $ret = $mingw64Dir
+         }
+      }
+      finally
+      {
+         Set-Location $current
+         Write-Host "End Download Mingw64" -ForegroundColor Green
+      }
+
+      return $ret
+   }
+
+   [string] BuildOpenBLAS()
+   {
+      $ret = ""
+      $current = Get-Location
+
+      try
+      {
+         if ($global:IsWindows)
+         {
+            $openBLASVersion = "0.3.7"
+            $filename = "OpenBLAS-${openBLASVersion}-x64.zip"
+            $url = "https://jaist.dl.sourceforge.net/project/openblas/v${openBLASVersion}/${filename}"
+
+            Write-Host "Start Download OpenBLAS from ${url}" -ForegroundColor Green
+
+            $openblasDir = $this._Config.GetOpenBLASRootDir()
+            if ((Test-Path $openblasDir) -eq $False)
+            {
+               New-Item $openblasDir -ItemType Directory
+            }
+
+            $zipfile = Join-Path $openblasDir $filename
+            if ((Test-Path $zipfile) -eq $False)
+            {
+               Invoke-WebRequest -Uri $url -OutFile $zipfile -UserAgent "Mozilla/5.0 (Windows NT; Windows NT 6.2; ja-JP) WindowsPowerShell/4.0"
+            }
+            Expand-Archive -Path $zipfile -DestinationPath $openblasDir
+
+            $ret = $openblasDir
+         }
+      }
+      finally
+      {
+         Set-Location $current
+         Write-Host "End Download OpenBLAS" -ForegroundColor Green
+      }
+
+      return $ret
    }
 
    [string] BuildOpenCV()
@@ -449,10 +578,10 @@ class ThirdPartyBuilder
          if ($global:IsWindows)
          {
             Write-Host "   cmake -G "NMake Makefiles" -D CMAKE_BUILD_TYPE=Release `
-         -D BUILD_SHARED_LIBS=OFF `
+         -D BUILD_SHARED_LIBS=ON `
          -D BUILD_WITH_STATIC_CRT=OFF `
          -D CMAKE_INSTALL_PREFIX="$installDir" `
-         -D BUILD_opencv_world=OFF `
+         -D BUILD_opencv_world=ON `
          -D BUILD_opencv_java=OFF `
          -D BUILD_opencv_python=OFF `
          -D BUILD_opencv_python2=OFF `
@@ -485,10 +614,10 @@ class ThirdPartyBuilder
          -D WITH_FFMPEG=OFF `
          $opencvDir" -ForegroundColor Yellow
             cmake -G "NMake Makefiles" -D CMAKE_BUILD_TYPE=Release `
-                                       -D BUILD_SHARED_LIBS=OFF `
+                                       -D BUILD_SHARED_LIBS=ON `
                                        -D BUILD_WITH_STATIC_CRT=OFF `
                                        -D CMAKE_INSTALL_PREFIX="$installDir" `
-                                       -D BUILD_opencv_world=OFF `
+                                       -D BUILD_opencv_world=ON `
                                        -D BUILD_opencv_java=OFF `
                                        -D BUILD_opencv_python=OFF `
                                        -D BUILD_opencv_python2=OFF `
@@ -626,11 +755,16 @@ class ThirdPartyBuilder
 
 function ConfigCPU([Config]$Config)
 {
+   if ($IsWindows)
+   {
+      CallVisualStudioDeveloperConsole
+   }
+
    # get root directory of incubator-mxnet
    $rootDir = $Config.GetMXNetRootDir()
 
    $Builder = [ThirdPartyBuilder]::new($Config)
-   
+
    # Build opencv
    $installOpenCVDir = $Builder.BuildOpenCV()
 
@@ -644,13 +778,42 @@ function ConfigCPU([Config]$Config)
 
    if ($IsWindows)
    {
-      $env:OpenCV_DIR = $installOpenCVDir
+      # Download OpenBLAS binary
+      $installOpenBLASDir = $Builder.BuildOpenBLAS()
 
-      cmake -G $Config.GetVisualStudio() -A $Config.GetVisualStudioArchitecture() -T host=x64 `
+      # Deploy mingw64 libraries
+      $installMingw64Dir = $Builder.BuildMingw64()
+
+      # Copy dependencies for python
+      $Builder.CopyBinaryForOpWrapperGenerator($installOpenCVDir, $installOpenBLASDir, $installMingw64Dir)
+
+      $env:OpenCV_DIR = $installOpenCVDir
+      $env:OpenBLAS_HOME = $installOpenBLASDir
+
+      $vs = $Config.GetVisualStudio()
+      $arch = $Config.GetVisualStudioArchitecture()
+
+      Write-Host "   cmake -G $vs -A $arch -T host=x64 `
+         -D USE_CPP_PACKAGE=1 `
+         -D USE_CUDA:BOOL=0 `
+         -D USE_CUDNN:BOOL=0 `
+         -D OpenCV_DIR=$installOpenCVDir `
+         -D USE_OPENCV=1 `
+         -D USE_OPENMP=1 `
+         -D USE_BLAS=open `
+         -D USE_LAPACK=1 `
+         -D BUILD_CPP_EXAMPLES=0 `
+         .." -ForegroundColor Yellow
+      cmake -G $vs -A $arch -T host=x64 `
             -D USE_CPP_PACKAGE=1 `
             -D USE_CUDA:BOOL=0 `
             -D USE_CUDNN:BOOL=0 `
             -D OpenCV_DIR=$installOpenCVDir `
+            -D USE_OPENCV=1 `
+            -D USE_OPENMP=1 `
+            -D USE_BLAS=open `
+            -D USE_LAPACK=1 `
+            -D BUILD_CPP_EXAMPLES=0 `
             $rootDir
    }
    else
@@ -667,11 +830,16 @@ function ConfigCPU([Config]$Config)
 
 function ConfigCUDA([Config]$Config)
 {
+   if ($IsWindows)
+   {
+      CallVisualStudioDeveloperConsole
+   }
+
    # get root directory of incubator-mxnet
    $rootDir = $Config.GetMXNetRootDir()
 
    $Builder = [ThirdPartyBuilder]::new($Config)
-   
+
    # Build opencv
    $installOpenCVDir = $Builder.BuildOpenCV()
 
@@ -685,23 +853,44 @@ function ConfigCUDA([Config]$Config)
 
    if ($IsWindows)
    {
+      # Download OpenBLAS binary
+      $installOpenBLASDir = $Builder.BuildOpenBLAS()
+
+      # Deploy mingw64 libraries
+      $installMingw64Dir = $Builder.BuildMingw64()
+
+      # Copy dependencies for python
+      $Builder.CopyBinaryForOpWrapperGenerator($installOpenCVDir, $installOpenBLASDir, $installMingw64Dir)
+
       $cudaPath = $Config.GetCUDAPath()
       if (!(Test-Path $cudaPath))
       {
-         Write-Host "Error: '${cudaPath}' does not found" -ForegroundColor Red
+         Write-Host "Error: CUDA_PATH '${cudaPath}' does not found" -ForegroundColor Red
          exit -1
       }
 
       $env:OpenCV_DIR = $installOpenCVDir
+      $env:OpenBLAS_HOME = $installOpenBLASDir
       $env:CUDA_PATH="${cudaPath}"
       $env:PATH="$env:CUDA_PATH\bin;$env:CUDA_PATH\libnvvp;$ENV:PATH"
       Write-Host "Info: CUDA_PATH: ${env:CUDA_PATH}" -ForegroundColor Green
 
-      cmake -G $Config.GetVisualStudio() -A $Config.GetVisualStudioArchitecture() -T host=x64 `
+      $vs = $Config.GetVisualStudio()
+      $arch = $Config.GetVisualStudioArchitecture()
+
+      Write-Host "   cmake -G $vs -A $arch -T host=x64 `
+         -D USE_CPP_PACKAGE=1 `
+         -D USE_CUDA:BOOL=1 `
+         -D USE_CUDNN:BOOL=1 `
+         -D OpenCV_DIR=$installOpenCVDir `
+         -D BUILD_CPP_EXAMPLES=0 `
+         .." -ForegroundColor Yellow
+      cmake -G $vs -A $arch -T host=x64 `
             -D USE_CPP_PACKAGE=1 `
             -D USE_CUDA:BOOL=1 `
             -D USE_CUDNN:BOOL=1 `
             -D OpenCV_DIR=$installOpenCVDir `
+            -D BUILD_CPP_EXAMPLES=0 `
             $rootDir
    }
    else
@@ -771,13 +960,14 @@ function CopyToArtifact()
    if ($configuration)
    {
       $binary = Join-Path ${srcDir} ${build}  | `
+               Join-Path -ChildPath "incubator-mxnet" | `
                Join-Path -ChildPath ${configuration} | `
                Join-Path -ChildPath ${libraryName}
    }
    else
    {
       $binary = Join-Path ${srcDir} ${build}  | `
-               Join-Path -ChildPath "incubator-mxnet" | ` 
+               Join-Path -ChildPath "incubator-mxnet" | `
                Join-Path -ChildPath ${libraryName}
    }
 

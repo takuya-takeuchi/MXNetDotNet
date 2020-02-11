@@ -332,3 +332,6 @@ __pycache__/
 
 # custom
 src/libmxnet/build_*/
+src/opencv
+src/openblas
+src/mingw64
