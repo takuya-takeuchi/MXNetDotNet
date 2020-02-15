@@ -1,4 +1,4 @@
-[submodule "incubator-mxnet"]
+[submodule "src/incubator-mxnet"]
 	path = src/incubator-mxnet
 	url = https://github.com/apache/incubator-mxnet.git
     ignore = dirty
