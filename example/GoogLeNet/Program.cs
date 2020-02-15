@@ -2,7 +2,9 @@
  * This sample program is ported by C# from incubator-mxnet/blob/master/cpp-package/example/googlenet.cpp.
 */
 
+using System;
 using System.Collections.Generic;
+using Examples;
 using MXNetDotNet;
 
 namespace GoogLeNet
@@ -13,92 +15,106 @@ namespace GoogLeNet
 
         #region Methods
 
-        private static void Main()
+        private static int Main(string[] args)
         {
-            const uint batchSize = 50;
-            const uint maxEpoch = 100;
+            var maxEpoch = args.Length > 0 && int.TryParse(args[0], out var ret) ? ret : 100;
+            const int batchSize = 50;
             const float learningRate = 1e-4f;
             const float weightDecay = 1e-4f;
 
-            var googlenet = GoogleNetSymbol(101 + 1); // +1 is BACKGROUND_Google
-            var argsMap = new Dictionary<string, NDArray>();
-            var auxMap = new Dictionary<string, NDArray>();
-
-            // change device type if you want to use GPU
-            var context = Context.Cpu();
-
-            argsMap["data"] = new NDArray(new Shape(batchSize, 3, 256, 256), context);
-            argsMap["data_label"] = new NDArray(new Shape(batchSize), context);
-            googlenet.InferArgsMap(Context.Cpu(), argsMap, argsMap);
-
-            var trainIter = new MXDataIter("ImageRecordIter")
-                .SetParam("path_imglist", "train.lst")
-                .SetParam("path_imgrec", "train.rec")
-                .SetParam("data_shape", new Shape(3, 256, 256))
-                .SetParam("batch_size", batchSize)
-                .SetParam("shuffle", 1)
-                .CreateDataIter();
-
-            var valIter = new MXDataIter("ImageRecordIter")
-                .SetParam("path_imglist", "val.lst")
-                .SetParam("path_imgrec", "val.rec")
-                .SetParam("data_shape", new Shape(3, 256, 256))
-                .SetParam("batch_size", batchSize)
-                .CreateDataIter();
-
-            var opt = OptimizerRegistry.Find("ccsgd");
-            opt.SetParam("momentum", 0.9)
-               .SetParam("rescale_grad", 1.0 / batchSize)
-               .SetParam("clip_gradient", 10)
-               .SetParam("lr", learningRate)
-               .SetParam("wd", weightDecay);
-
-            using (var exec = googlenet.SimpleBind(Context.Cpu(), argsMap))
+            try
             {
-                var argNames = googlenet.ListArguments();
+                var googlenet = GoogleNetSymbol(101 + 1); // +1 is BACKGROUND_Google
+                var argsMap = new Dictionary<string, NDArray>();
+                var auxMap = new Dictionary<string, NDArray>();
 
-                for (var iter = 0; iter < maxEpoch; ++iter)
+                // change device type if you want to use GPU
+                var context = Context.Cpu();
+
+                argsMap["data"] = new NDArray(new Shape(batchSize, 3, 256, 256), context);
+                argsMap["data_label"] = new NDArray(new Shape(batchSize), context);
+                googlenet.InferArgsMap(Context.Cpu(), argsMap, argsMap);
+
+                string[] dataFiles = { "./data/mnist_data/train-images-idx3-ubyte",
+                                         "./data/mnist_data/train-labels-idx1-ubyte",
+                                         "./data/mnist_data/t10k-images-idx3-ubyte",
+                                         "./data/mnist_data/t10k-labels-idx1-ubyte"
+                                     };
+
+                using (var trainIter = new MXDataIter("MNISTIter"))
                 {
-                    Logging.LG($"Epoch: {iter}");
+                    if (!Utils.SetDataIter(trainIter, "Train", dataFiles, batchSize))
+                        return 1;
 
-                    trainIter.Reset();
-                    while (trainIter.Next())
+                    using (var valIter = new MXDataIter("MNISTIter"))
                     {
-                        var dataBatch = trainIter.GetDataBatch();
-                        dataBatch.Data.CopyTo(argsMap["data"]);
-                        dataBatch.Label.CopyTo(argsMap["data_label"]);
-                        NDArray.WaitAll();
-                        exec.Forward(true);
-                        exec.Backward();
-                        for (var i = 0; i < argNames.Count; ++i)
-                        {
-                            if (argNames[i] == "data" || argNames[i] == "data_label")
-                                continue;
+                        if (!Utils.SetDataIter(valIter, "Label", dataFiles, batchSize))
+                            return 1;
 
-                            var weight = exec.ArgmentArrays[i];
-                            var grad = exec.GradientArrays[i];
-                            opt.Update(i, weight, grad);
+                        using (var opt = OptimizerRegistry.Find("sgd"))
+                        {
+                            opt.SetParam("momentum", 0.9)
+                               .SetParam("rescale_grad", 1.0 / batchSize)
+                               .SetParam("clip_gradient", 10)
+                               .SetParam("lr", learningRate)
+                               .SetParam("wd", weightDecay);
+
+                            using (var exec = googlenet.SimpleBind(Context.Cpu(), argsMap))
+                            {
+                                var argNames = googlenet.ListArguments();
+
+                                for (var iter = 0; iter < maxEpoch; ++iter)
+                                {
+                                    Logging.LG($"Epoch: {iter}");
+
+                                    trainIter.Reset();
+                                    while (trainIter.Next())
+                                    {
+                                        var dataBatch = trainIter.GetDataBatch();
+                                        dataBatch.Data.CopyTo(argsMap["data"]);
+                                        dataBatch.Label.CopyTo(argsMap["data_label"]);
+                                        NDArray.WaitAll();
+                                        exec.Forward(true);
+                                        exec.Backward();
+                                        for (var i = 0; i < argNames.Count; ++i)
+                                        {
+                                            if (argNames[i] == "data" || argNames[i] == "data_label")
+                                                continue;
+
+                                            var weight = exec.ArgmentArrays[i];
+                                            var grad = exec.GradientArrays[i];
+                                            opt.Update(i, weight, grad);
+                                        }
+                                    }
+
+                                    var acu = new Accuracy();
+                                    valIter.Reset();
+                                    while (valIter.Next())
+                                    {
+                                        var dataBatch = valIter.GetDataBatch();
+                                        dataBatch.Data.CopyTo(argsMap["data"]);
+                                        dataBatch.Label.CopyTo(argsMap["data_label"]);
+                                        NDArray.WaitAll();
+                                        exec.Forward(false);
+                                        NDArray.WaitAll();
+                                        acu.Update(dataBatch.Label, exec.Outputs[0]);
+                                    }
+
+                                    Logging.LG($"Accuracy: {acu.Get()}");
+                                }
+                            }
+
+                            MXNet.MXNotifyShutdown();
                         }
                     }
-
-                    var acu = new Accuracy();
-                    valIter.Reset();
-                    while (valIter.Next())
-                    {
-                        var dataBatch = valIter.GetDataBatch();
-                        dataBatch.Data.CopyTo(argsMap["data"]);
-                        dataBatch.Label.CopyTo(argsMap["data_label"]);
-                        NDArray.WaitAll();
-                        exec.Forward(false);
-                        NDArray.WaitAll();
-                        acu.Update(dataBatch.Label, exec.Outputs[0]);
-                    }
-
-                    Logging.LG($"Accuracy: {acu.Get()}");
                 }
             }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
 
-            MXNet.MXNotifyShutdown();
+            return 0;
         }
 
         #region Helpers

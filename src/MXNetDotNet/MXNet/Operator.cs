@@ -124,6 +124,15 @@ namespace MXNetDotNet
             return new Symbol(symbolHandle);
         }
 
+        public Operator Function(NDArray ndArray)
+        {
+            if (ndArray == null)
+                throw new ArgumentNullException(nameof(ndArray));
+
+            this._InputNdarrays.Add(ndArray.GetHandle());
+            return this;
+        }
+
         public List<NDArray> Invoke()
         {
             var outputs = new List<NDArray>();

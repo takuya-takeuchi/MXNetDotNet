@@ -230,6 +230,24 @@ namespace MXNetDotNet
             return arrayMap;
         }
 
+        public NDArray Reshape(Shape newShape)
+        {
+            var dims = new int[newShape.Dimension];
+            for (uint i = 0; i < newShape.Dimension; ++i)
+            {
+                dims[i] = (int)newShape[i];
+            }
+
+            var _ = newShape.Data;
+
+            Logging.CHECK_EQ(NativeMethods.MXNDArrayReshape(this.GetHandle(),
+                                                            (int)newShape.Dimension,
+                                                            dims,
+                                                            out var handle), NativeMethods.OK);
+
+            return new NDArray(handle);
+        }
+
         public static void SampleGaussian(mx_float mu, mx_float sigma, NDArray @out)
         {
             using (var op = new Operator("_random_normal"))

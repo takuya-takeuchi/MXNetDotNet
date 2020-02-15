@@ -15,6 +15,16 @@ dotnet build --configuration Release
 
 At last, copy ***libmxnet.dll*** and dependencies to output directory; &lt;InceptionBN_dir&gt;\bin\Release\netcoreapp2.0.
 
+### Windows
+
+Depencencies are 
+
+* libgcc_s_seh-1.dll
+* libgfortran-3.dll
+* libopenblas.dll
+* libquadmath-0.dll
+* opencv_world349.dll
+
 ## 2. Download demo data
 
 Download train data from [Dogs vs. Cats Redux: Kernels Edition](https://www.kaggle.com/c/dogs-vs-cats-redux-kernels-edition/data) on **Kaggle**.  
@@ -24,6 +34,15 @@ After login, go to avobe page and download it.
 ![Kaggle](images/kaggle.png "Kaggle")
 
 After download, downaloded file move to **<InceptionBN_dir>**.
+
+## 2. Download test data
+
+Download mnist data from [THE MNIST DATABASE of handwritten digits](http://yann.lecun.com/exdb/mnist/).</br>
+The following command do downloading test data automatically.
+
+````
+$ pwsh prepare.ps1
+````
 
 ## 3. Setup data
 

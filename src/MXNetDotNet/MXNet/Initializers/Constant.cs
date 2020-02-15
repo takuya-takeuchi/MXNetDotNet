@@ -25,7 +25,7 @@ namespace MXNetDotNet
 
         #region Methods
 
-        public override void Operator(string name, NDArray array)
+        public override void Function(string name, NDArray array)
         {
             array.Set(this.Value);
         }

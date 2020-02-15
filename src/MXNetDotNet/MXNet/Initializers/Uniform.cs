@@ -37,7 +37,7 @@ namespace MXNetDotNet
 
         #region Methods
 
-        public override void Operator(string name, NDArray array)
+        public override void Function(string name, NDArray array)
         {
             NDArray.SampleUniform(this.Begin, this.End, array);
         }

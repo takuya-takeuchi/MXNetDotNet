@@ -50,7 +50,7 @@ namespace AlexNet
                 {
                     /*be careful here, the arg's name must has some specific ends or starts for
                      * initializer to call*/
-                    xavier.Operator(arg.Key, arg.Value);
+                    xavier.Function(arg.Key, arg.Value);
                 }
 
                 /*print out to check the shape of the net*/

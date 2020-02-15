@@ -3,10 +3,15 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp2.0</TargetFramework>
+    <Authors>Takuya Takeuchi</Authors>
+    <Description>Example of MXNetDotNet</Description>
+    <Company />
+    <Configurations>Debug;Release</Configurations>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MXNetDotNet\MXNetDotNet.csproj" />
+    <ProjectReference Include="..\Utils\Utils.csproj" />
   </ItemGroup>
 
 </Project>

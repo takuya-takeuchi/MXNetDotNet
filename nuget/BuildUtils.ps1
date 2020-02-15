@@ -567,6 +567,8 @@ class ThirdPartyBuilder
       {
          Write-Host "Start Build OpenCV" -ForegroundColor Green
 
+         $configuration = $this._Config.GetConfigurationName()
+
          $opencvDir = $this._Config.GetOpenCVRootDir()
          $opencvTarget = Join-Path $current opencv
          New-Item $opencvTarget -Force -ItemType Directory
@@ -577,7 +579,7 @@ class ThirdPartyBuilder
 
          if ($global:IsWindows)
          {
-            Write-Host "   cmake -G "NMake Makefiles" -D CMAKE_BUILD_TYPE=Release `
+            Write-Host "   cmake -G "NMake Makefiles" -D CMAKE_BUILD_TYPE=$configuration `
          -D BUILD_SHARED_LIBS=ON `
          -D BUILD_WITH_STATIC_CRT=OFF `
          -D CMAKE_INSTALL_PREFIX="$installDir" `
@@ -613,7 +615,7 @@ class ThirdPartyBuilder
          -D WITH_IPP=OFF `
          -D WITH_FFMPEG=OFF `
          $opencvDir" -ForegroundColor Yellow
-            cmake -G "NMake Makefiles" -D CMAKE_BUILD_TYPE=Release `
+            cmake -G "NMake Makefiles" -D CMAKE_BUILD_TYPE=$configuration `
                                        -D BUILD_SHARED_LIBS=ON `
                                        -D BUILD_WITH_STATIC_CRT=OFF `
                                        -D CMAKE_INSTALL_PREFIX="$installDir" `
@@ -656,7 +658,7 @@ class ThirdPartyBuilder
          }
          else
          {
-            Write-Host "   cmake -D CMAKE_BUILD_TYPE=Release `
+            Write-Host "   cmake -D CMAKE_BUILD_TYPE=$configuration `
          -D BUILD_SHARED_LIBS=OFF `
          -D BUILD_WITH_STATIC_CRT=OFF `
          -D CMAKE_INSTALL_PREFIX="$installDir" `
@@ -696,7 +698,7 @@ class ThirdPartyBuilder
          -D WITH_IPP=OFF `
          -D WITH_FFMPEG=OFF `
          $opencvDir" -ForegroundColor Yellow
-            cmake -D CMAKE_BUILD_TYPE=Release `
+            cmake -D CMAKE_BUILD_TYPE=$configuration `
                   -D BUILD_SHARED_LIBS=OFF `
                   -D BUILD_WITH_STATIC_CRT=OFF `
                   -D CMAKE_INSTALL_PREFIX="$installDir" `

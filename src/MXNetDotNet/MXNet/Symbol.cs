@@ -27,12 +27,15 @@ namespace MXNetDotNet
         }
 
         public Symbol()
-            : this(IntPtr.Zero)
+            : this("")
         {
         }
 
         public Symbol(IntPtr handle)
         {
+            if (handle == IntPtr.Zero)
+                throw new ArgumentException($"{nameof(handle)} must not be {nameof(IntPtr)}.{nameof(IntPtr.Zero)}", nameof(handle));
+
             this.NativePtr = handle;
         }
 

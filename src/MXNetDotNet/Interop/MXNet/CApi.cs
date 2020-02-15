@@ -37,6 +37,14 @@ namespace MXNetDotNet.Interop
         [DllImport(NativeLibrary, CallingConvention = CallingConvention)]
         public static extern int MXNotifyShutdown();
 
+        /// <summary>
+        /// Get the number of GPUs.
+        /// </summary>
+        /// <param name="out"> pointer to int that will hold the number of GPUs available.</param>
+        /// <returns>0 when success, -1 when failure happens.</returns>
+        [DllImport(NativeLibrary, CallingConvention = CallingConvention)]
+        public static extern int MXGetGPUCount(out int @out);
+
         #endregion
 
         #region Part 1: NDArray creation and deletion
@@ -128,6 +136,28 @@ namespace MXNetDotNet.Interop
         public static extern int MXNDArrayGetShape(NDArrayHandle handle,
                                                    out mx_uint out_dim,
                                                    out AtomicSymbolCreator out_pdata);
+
+        /*!
+         * \brief Reshape the NDArray.
+         * \param handle the handle to the narray
+         * \param ndim number of dimensions of new shape
+         * \param dims new shape
+         * \param out the NDArrayHandle of reshaped NDArray
+         * \return 0 when success, -1 when failure happens
+         */
+        /// <summary>
+        /// Reshape the NDArray.
+        /// </summary>
+        /// <param name="handle">handle the handle to the narray</param>
+        /// <param name="ndim">ndim number of dimensions of new shape</param>
+        /// <param name="dims">dims new shape</param>
+        /// <param name="@out">out the NDArrayHandle of reshaped NDArray</param>
+        /// <returns>0 when success, -1 when failure happens</returns>
+        [DllImport(NativeLibrary, CallingConvention = CallingConvention)]
+        public static extern int MXNDArrayReshape(NDArrayHandle handle,
+                                                  int ndim,
+                                                  int[] dims,
+                                                  out NDArrayHandle @out);
 
         /// <summary>
         /// Slice the NDArray along axis 0.

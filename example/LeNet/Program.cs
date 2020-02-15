@@ -41,14 +41,15 @@ namespace LeNet
             public Lenet()
             {
                 this._CtxCpu = new Context(DeviceType.CPU, 0);
-                this._CtxDev = new Context(DeviceType.CPU, 0);
+                //this._CtxDev = new Context(DeviceType.CPU, 0);
+                this._CtxDev = new Context(DeviceType.GPU, 0);
             }
 
             #endregion
 
             #region Methods
 
-            public void Run()
+            public void Run(int maxEpoch)
             {
                 /*
                  * LeCun, Yann, Leon Bottou, Yoshua Bengio, and Patrick Haffner.
@@ -95,7 +96,6 @@ namespace LeNet
                 var W = 28u;
                 var H = 28u;
                 const int batchSize = 42;
-                const int maxEpoch = 100000;
                 const float learningRate = 1e-4f;
                 const float weightDecay = 1e-4f;
 
@@ -105,93 +105,97 @@ namespace LeNet
                 var dataCount = GetData(dataVec, labelVec);
                 var dptr = dataVec.ToArray();
                 var lptr = labelVec.ToArray();
-                NDArray dataArray = new NDArray(new Shape((uint)dataCount, 1, W, H), this._CtxCpu,
-                                             false);  // store in main memory, and copy to
-                                                      // device memory while training
-                NDArray labelArray = new NDArray(new Shape((uint)dataCount), this._CtxCpu,
-                            false);  // it's also ok if just store them all in device memory
-                dataArray.SyncCopyFromCPU(dptr, (uint)(dataCount * W * H));
-                labelArray.SyncCopyFromCPU(lptr, dataCount);
-                dataArray.WaitToRead();
-                labelArray.WaitToRead();
-
-                var trainNum = (uint)(dataCount * (1 - valFold / 10.0));
-                this._TrainData = dataArray.Slice(0, trainNum);
-                this._TrainLabel = labelArray.Slice(0, trainNum);
-                this._ValData = dataArray.Slice(trainNum, (uint)dataCount);
-                this._ValLabel = labelArray.Slice(trainNum, (uint)dataCount);
-
-                Logging.LG("here read fin");
-
-                /*init some of the args*/
-                // map<string, NDArray> args_map;
-                this._ArgsMap["data"] = dataArray.Slice(0, (uint)batchSize).Copy(this._CtxDev);
-                this._ArgsMap["data_label"] = labelArray.Slice(0, (uint)batchSize).Copy(this._CtxDev);
-                NDArray.WaitAll();
-
-                Logging.LG("here slice fin");
-
-                /*
-                 * we can also feed in some of the args other than the input all by
-                 * ourselves,
-                 * fc2-w , fc1-b for example:
-                 * */
-                // args_map["fc2_w"] =
-                // NDArray(mshadow.Shape2(500, 4 * 4 * 50), ctx_dev, false);
-                // NDArray.SampleGaussian(0, 1, &args_map["fc2_w"]);
-                // args_map["fc1_b"] = NDArray(mshadow.Shape1(10), ctx_dev, false);
-                // args_map["fc1_b"] = 0;
-
-                lenet.InferArgsMap(this._CtxDev, this._ArgsMap, this._ArgsMap);
-                var opt = OptimizerRegistry.Find("ccsgd");
-                opt.SetParam("momentum", 0.9)
-                   .SetParam("rescale_grad", 1.0)
-                   .SetParam("clip_gradient", 10)
-                   .SetParam("lr", learningRate)
-                   .SetParam("wd", weightDecay);
-
-                using (var exe = lenet.SimpleBind(this._CtxDev, this._ArgsMap))
+                using (NDArray dataArray = new NDArray(new Shape((uint)dataCount, 1, W, H), this._CtxCpu,
+                                                                  false))  // store in main memory, and copy to
+                                                                           // device memory while training
+                using (NDArray labelArray = new NDArray(new Shape((uint)dataCount), this._CtxCpu,
+                                                                  false)) // it's also ok if just store them all in device memory
                 {
-                    var argNames = lenet.ListArguments();
+                    dataArray.SyncCopyFromCPU(dptr, (uint)(dataCount * W * H));
+                    labelArray.SyncCopyFromCPU(lptr, dataCount);
+                    dataArray.WaitToRead();
+                    labelArray.WaitToRead();
 
-                    for (var iter = 0; iter < maxEpoch; ++iter)
+                    var trainNum = (uint)(dataCount * (1 - valFold / 10.0));
+                    this._TrainData = dataArray.Slice(0, trainNum);
+                    this._TrainLabel = labelArray.Slice(0, trainNum);
+                    this._ValData = dataArray.Slice(trainNum, (uint)dataCount);
+                    this._ValLabel = labelArray.Slice(trainNum, (uint)dataCount);
+
+                    Logging.LG("here read fin");
+
+                    /*init some of the args*/
+                    // map<string, NDArray> args_map;
+                    this._ArgsMap["data"] = dataArray.Slice(0, (uint)batchSize).Copy(this._CtxDev);
+                    this._ArgsMap["data_label"] = labelArray.Slice(0, (uint)batchSize).Copy(this._CtxDev);
+                    NDArray.WaitAll();
+
+                    Logging.LG("here slice fin");
+
+                    /*
+                     * we can also feed in some of the args other than the input all by
+                     * ourselves,
+                     * fc2-w , fc1-b for example:
+                     * */
+                    // args_map["fc2_w"] =
+                    // NDArray(mshadow.Shape2(500, 4 * 4 * 50), ctx_dev, false);
+                    // NDArray.SampleGaussian(0, 1, &args_map["fc2_w"]);
+                    // args_map["fc1_b"] = NDArray(mshadow.Shape1(10), ctx_dev, false);
+                    // args_map["fc1_b"] = 0;
+
+                    lenet.InferArgsMap(this._CtxDev, this._ArgsMap, this._ArgsMap);
+                    using (var opt = OptimizerRegistry.Find("ccsgd"))
                     {
-                        size_t startIndex = 0;
-                        while (startIndex < trainNum)
+                        opt.SetParam("momentum", 0.9)
+                           .SetParam("rescale_grad", 1.0)
+                           .SetParam("clip_gradient", 10)
+                           .SetParam("lr", learningRate)
+                           .SetParam("wd", weightDecay);
+
+                        using (var exe = lenet.SimpleBind(this._CtxDev, this._ArgsMap))
                         {
-                            if (startIndex + (size_t)batchSize > trainNum)
-                                startIndex = trainNum - (size_t)batchSize;
+                            var argNames = lenet.ListArguments();
 
-                            using (var slice = this._TrainData.Slice((uint)startIndex, (uint)(startIndex + batchSize)))
+                            for (var iter = 0; iter < maxEpoch; ++iter)
                             {
-                                this._ArgsMap["data"]?.Dispose();
-                                this._ArgsMap["data"] = slice.Copy(this._CtxDev);
-                            }
-                            using (var slice = this._TrainLabel.Slice((uint)startIndex, (uint)(startIndex + (ulong)batchSize)))
-                            {
-                                this._ArgsMap["data_label"]?.Dispose();
-                                this._ArgsMap["data_label"] = slice.Copy(this._CtxDev);
-                            }
+                                size_t startIndex = 0;
+                                while (startIndex < trainNum)
+                                {
+                                    if (startIndex + (size_t)batchSize > trainNum)
+                                        startIndex = trainNum - (size_t)batchSize;
 
-                            startIndex += (size_t)batchSize;
-                            NDArray.WaitAll();
+                                    using (var slice = this._TrainData.Slice((uint)startIndex, (uint)(startIndex + batchSize)))
+                                    {
+                                        this._ArgsMap["data"]?.Dispose();
+                                        this._ArgsMap["data"] = slice.Copy(this._CtxDev);
+                                    }
+                                    using (var slice = this._TrainLabel.Slice((uint)startIndex, (uint)(startIndex + (ulong)batchSize)))
+                                    {
+                                        this._ArgsMap["data_label"]?.Dispose();
+                                        this._ArgsMap["data_label"] = slice.Copy(this._CtxDev);
+                                    }
 
-                            exe.Forward(true);
-                            exe.Backward();
+                                    startIndex += (size_t)batchSize;
+                                    NDArray.WaitAll();
 
-                            // Update parameters
-                            for (var i = 0; i < argNames.Count; ++i)
-                            {
-                                if (argNames[i] == "data" || argNames[i] == "data_label")
-                                    continue;
+                                    exe.Forward(true);
+                                    exe.Backward();
 
-                                var weight = exe.ArgmentArrays[i];
-                                var grad = exe.GradientArrays[i];
-                                opt.Update(i, weight, grad);
+                                    // Update parameters
+                                    for (var i = 0; i < argNames.Count; ++i)
+                                    {
+                                        if (argNames[i] == "data" || argNames[i] == "data_label")
+                                            continue;
+
+                                        var weight = exe.ArgmentArrays[i];
+                                        var grad = exe.GradientArrays[i];
+                                        opt.Update(i, weight, grad);
+                                    }
+                                }
+
+                                Logging.LG($"Iter {iter}, accuracy: {ValAccuracy(batchSize * 10, lenet)}");
                             }
                         }
-
-                        Logging.LG($"Iter {iter}, accuracy: {ValAccuracy(batchSize * 10, lenet)}");
                     }
                 }
             }
@@ -200,7 +204,7 @@ namespace LeNet
 
             private size_t GetData(List<float> data, List<float> label)
             {
-                const string trainDataPath = "./train.csv";
+                const string trainDataPath = "./data/mnist_data/mnist_train.csv";
                 var lines = File.ReadAllLines(trainDataPath);
 
                 // ignore the header
@@ -309,11 +313,13 @@ namespace LeNet
 
         }
 
-        private static void Main()
+        private static int Main(string[] args)
         {
+            var maxEpoch = args.Length > 0 && int.TryParse(args[0], out var ret) ? ret : 100000;
             var lenet = new Lenet();
-            lenet.Run();
+            lenet.Run(maxEpoch);
             MXNet.MXNotifyShutdown();
+            return 0;
         }
 
     }

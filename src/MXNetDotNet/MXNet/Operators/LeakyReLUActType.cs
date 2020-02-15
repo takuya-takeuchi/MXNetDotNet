@@ -7,11 +7,15 @@ namespace MXNetDotNet
 
         Elu = 0,
 
-        Leaky = 1,
+        Gelu = 1,
 
-        Prelu = 2,
+        Leaky = 2,
 
-        Rrelu = 3
+        Prelu = 3,
+
+        Rrelu = 4,
+
+        Selu = 5
 
     }
 

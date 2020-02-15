@@ -12,9 +12,11 @@ namespace MXNetDotNet
         private static readonly string[] LeakyReLUActTypeValues =
         {
             "elu",
+            "gelu",
             "leaky",
             "prelu",
-            "rrelu"
+            "rrelu",
+            "selu"
         };
 
         #endregion
@@ -23,6 +25,7 @@ namespace MXNetDotNet
 
         public static Symbol LeakyReLU(string symbolName,
                                        Symbol data,
+                                       Symbol gamma,
                                        LeakyReLUActType actType = LeakyReLUActType.Leaky,
                                        mx_float slope = 0.25f,
                                        mx_float lowerBound = 0.125f,
@@ -33,10 +36,12 @@ namespace MXNetDotNet
                                             .SetParam("lower_bound", lowerBound)
                                             .SetParam("upper_bound", upperBound)
                                             .SetInput("data", data)
+                                            .SetInput("gamma", gamma)
                                             .CreateSymbol(symbolName);
         }
 
         public static Symbol LeakyReLU(Symbol data,
+                                       Symbol gamma,
                                        LeakyReLUActType actType = LeakyReLUActType.Leaky,
                                        mx_float slope = 0.25f,
                                        mx_float lowerBound = 0.125f,
@@ -47,6 +52,7 @@ namespace MXNetDotNet
                                             .SetParam("lower_bound", lowerBound)
                                             .SetParam("upper_bound", upperBound)
                                             .SetInput("data", data)
+                                            .SetInput("gamma", gamma)
                                             .CreateSymbol();
         }
 

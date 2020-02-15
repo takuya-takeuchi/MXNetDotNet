@@ -2,8 +2,11 @@
  * This sample program is ported by C# from incubator-mxnet/blob/master/cpp-package/example/inception_bn.cpp.
 */
 
+using System;
 using System.Collections.Generic;
+using Examples;
 using MXNetDotNet;
+using Operators = MXNetDotNet.Operators;
 
 namespace InceptionBN
 {
@@ -13,11 +16,11 @@ namespace InceptionBN
 
         #region Methods
 
-        private static void Main()
+        private static int Main(string[] args)
         {
-            const uint batchSize = 40u;
-            const int maxEpoch = 100;
-            const float learningRate = 1e-4f;
+            var maxEpoch = args.Length > 0 && int.TryParse(args[0], out var ret) ? ret : 100;
+            const int batchSize = 40;
+            const float learningRate = 1e-2f;
             const float weightDecay = 1e-4f;
 
             var inceptionBnNet = InceptionSymbol(10);
@@ -26,81 +29,115 @@ namespace InceptionBN
 
             // change device type if you want to use GPU
             var context = Context.Gpu();
-
-            argsMap["data"] = new NDArray(new Shape(batchSize, 3, 224, 224), context);
-            argsMap["data_label"] = new NDArray(new Shape(batchSize), context);
-            inceptionBnNet.InferArgsMap(context, argsMap, argsMap);
-
-            var trainIter = new MXDataIter("ImageRecordIter")
-                .SetParam("path_imglist", "./data/train.lst")
-                .SetParam("path_imgrec", "./data/train.rec")
-                .SetParam("data_shape", new Shape(3, 224, 224))
-                .SetParam("batch_size", batchSize)
-                .SetParam("shuffle", 1)
-                .CreateDataIter();
-
-            var valIter = new MXDataIter("ImageRecordIter")
-                .SetParam("path_imglist", "./data/val.lst")
-                .SetParam("path_imgrec", "./data/val.rec")
-                .SetParam("data_shape", new Shape(3, 224, 224))
-                .SetParam("batch_size", batchSize)
-                .CreateDataIter();
-
-            var opt = OptimizerRegistry.Find("ccsgd");
-            opt.SetParam("momentum", 0.9)
-               .SetParam("rescale_grad", 1.0 / batchSize)
-               .SetParam("clip_gradient", 10)
-               .SetParam("lr", learningRate)
-               .SetParam("wd", weightDecay);
-
-            using (var exec = inceptionBnNet.SimpleBind(context, argsMap))
+            int numGpu = 0;
+            MXNet.MXGetGPUCount(out numGpu);
+            if (numGpu > 0)
             {
-                var argNames = inceptionBnNet.ListArguments();
-
-                for (var iter = 0; iter < maxEpoch; ++iter)
-                {
-                    Logging.LG($"Epoch: {iter}");
-
-                    trainIter.Reset();
-                    while (trainIter.Next())
-                    {
-                        var dataBatch = trainIter.GetDataBatch();
-                        dataBatch.Data.CopyTo(argsMap["data"]);
-                        dataBatch.Label.CopyTo(argsMap["data_label"]);
-                        NDArray.WaitAll();
-
-                        exec.Forward(true);
-                        exec.Backward();
-                        // Update parameters
-                        for (var i = 0; i < argNames.Count; ++i)
-                        {
-                            if (argNames[i] == "data" || argNames[i] == "data_label")
-                                continue;
-
-                            opt.Update(i, exec.ArgmentArrays[i], exec.GradientArrays[i]);
-                        }
-
-                        NDArray.WaitAll();
-                    }
-
-                    var accuracy = new Accuracy();
-                    valIter.Reset();
-                    while (valIter.Next())
-                    {
-                        var dataBatch = valIter.GetDataBatch();
-                        dataBatch.Data.CopyTo(argsMap["data"]);
-                        dataBatch.Label.CopyTo(argsMap["data_label"]);
-                        NDArray.WaitAll();
-                        exec.Forward(false);
-                        NDArray.WaitAll();
-                        accuracy.Update(dataBatch.Label, exec.Outputs[0]);
-                    }
-
-                    Logging.LG($"Accuracy: {accuracy.Get()}");
-                }
+                context = Context.Gpu();
             }
 
-            MXNet.MXNotifyShutdown();
+            try
+            {
+                var dataShape = new Shape(batchSize, 3, 224, 224);
+                var labelShape = new Shape(batchSize);
+                argsMap["data"] = new NDArray(dataShape, context);
+                argsMap["data_label"] = new NDArray(labelShape, context);
+                inceptionBnNet.InferArgsMap(context, argsMap, argsMap);
+                
+                string[] dataFiles = { "./data/mnist_data/train-images-idx3-ubyte",
+                                       "./data/mnist_data/train-labels-idx1-ubyte",
+                                       "./data/mnist_data/t10k-images-idx3-ubyte",
+                                       "./data/mnist_data/t10k-labels-idx1-ubyte"
+                                     };
+
+                using (var trainIter = new MXDataIter("MNISTIter"))
+                {
+                    if (!Utils.SetDataIter(trainIter, "Train", dataFiles, batchSize))
+                        return 1;
+
+                    using (var valIter = new MXDataIter("MNISTIter"))
+                    {
+                        if (!Utils.SetDataIter(valIter, "Label", dataFiles, batchSize))
+                            return 1;
+                        
+                        // initialize parameters
+                        Xavier xavier = new Xavier(RandType.Gaussian, FactorType.In, 2);
+                        foreach (var arg in argsMap) 
+                            xavier.Function(arg.Key, arg.Value);
+
+                        using (var opt = OptimizerRegistry.Find("sgd"))
+                        {
+                            opt.SetParam("momentum", 0.9)
+                               .SetParam("rescale_grad", 1.0 / batchSize)
+                               .SetParam("clip_gradient", 10)
+                               .SetParam("lr", learningRate)
+                               .SetParam("wd", weightDecay);
+
+                            using (var exec = inceptionBnNet.SimpleBind(context, argsMap))
+                            {
+                                var argNames = inceptionBnNet.ListArguments();
+
+                                // Create metrics
+                                var trainAcc = new Accuracy();
+                                var valAcc = new Accuracy();
+                                for (var iter = 0; iter < maxEpoch; ++iter)
+                                {
+                                    Logging.LG($"Epoch: {iter}");
+                                    trainIter.Reset();
+                                    trainAcc.Reset();
+
+                                    while (trainIter.Next())
+                                    {
+                                        var dataBatch = trainIter.GetDataBatch();
+                                        dataBatch.Data.CopyTo(argsMap["data"]);
+                                        ResizeInput(dataBatch.Data, dataShape).CopyTo(argsMap["data"]);
+                                        dataBatch.Label.CopyTo(argsMap["data_label"]);
+                                        NDArray.WaitAll();
+
+                                        exec.Forward(true);
+                                        exec.Backward();
+                                        // Update parameters
+                                        for (var i = 0; i < argNames.Count; ++i)
+                                        {
+                                            if (argNames[i] == "data" || argNames[i] == "data_label")
+                                                continue;
+
+                                            opt.Update(i, exec.ArgmentArrays[i], exec.GradientArrays[i]);
+                                        }
+
+                                        NDArray.WaitAll();
+                                        trainAcc.Update(dataBatch.Label, exec.Outputs[0]);
+                                    }
+
+                                    valIter.Reset();
+                                    valAcc.Reset();
+                                    while (valIter.Next())
+                                    {
+                                        var dataBatch = valIter.GetDataBatch();
+                                        ResizeInput(dataBatch.Data, dataShape).CopyTo(argsMap["data"]);
+                                        dataBatch.Label.CopyTo(argsMap["data_label"]);
+                                        NDArray.WaitAll();
+                                        exec.Forward(false);
+                                        NDArray.WaitAll();
+                                        valAcc.Update(dataBatch.Label, exec.Outputs[0]);
+                                    }
+
+                                    Logging.LG($"Train Accuracy: {trainAcc.Get()}");
+                                    Logging.LG($"Validation Accuracy: {valAcc.Get()}");
+                                }
+                            }
+                        }
+
+                        MXNet.MXNotifyShutdown();
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+
+            return 0;
         }
 
         #region Helpers
@@ -184,7 +221,8 @@ namespace InceptionBN
             cd3x3 = ConvFactoryBN(cd3x3, num_d3x3, new Shape(3, 3), new Shape(2, 2), new Shape(1, 1), name + "_double_3x3_1");
             var pooling = Operators.Pooling("max_pool_" + name + "_pool", data,
                                      new Shape(3, 3), PoolingPoolType.Max,
-                                     false, false, PoolingPoolingConvention.Valid, new Shape(2, 2), new Shape(1, 1));
+                                     false, false, PoolingPoolingConvention.Valid,
+                                     new Shape(2, 2), new Shape(1, 1));
 
             var lst = new List<Symbol>();
             lst.Add(c3x3);
@@ -236,7 +274,23 @@ namespace InceptionBN
             Symbol fc1 = Operators.FullyConnected("fc1", flatten, conv1_w, conv1_b, numClasses);
             return Operators.SoftmaxOutput("softmax", fc1, data_label);
         }
+        
+        private static NDArray ResizeInput(NDArray data, Shape newShape)
+        {
+            NDArray pic1Channel = data.Reshape(new Shape(0, 1, 28, 28));
+            var output = new NDArray();
+            new Operator("_contrib_BilinearResize2D")
+                .SetParam("height", newShape[2])
+                .SetParam("width", newShape[3])
+                .Function(pic1Channel)
+                .Invoke(output);
+            new Operator("tile")
+                .SetParam("reps", new Shape(1, 3, 1, 1))
+                .Function(pic1Channel)
+                .Invoke(output);
 
+            return output;
+        }
 
         #endregion
 

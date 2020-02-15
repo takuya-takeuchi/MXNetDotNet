@@ -9,7 +9,7 @@ namespace MXNetDotNet
 
         #region Methods
 
-        public virtual void Operator(string name, NDArray array)
+        public virtual void Function(string name, NDArray array)
         {
             if (StringStartWith(name, "upsampling"))
             {

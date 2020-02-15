@@ -4,6 +4,8 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
+using Examples;
 using MXNetDotNet;
 
 namespace LeNetWithMXDataIter
@@ -14,13 +16,13 @@ namespace LeNetWithMXDataIter
 
         #region Methods
 
-        private static void Main()
+        private static int Main(string[] args)
         {
             /*setup basic configs*/
             const int W = 28;
             const int H = 28;
             const int batchSize = 128;
-            const int maxEpoch = 100;
+            var maxEpoch = args.Length > 0 ? float.Parse(args[0], NumberStyles.Float, null) : 100;
             const float learningRate = 1e-4f;
             const float weightDecay = 1e-4f;
 
@@ -29,8 +31,11 @@ namespace LeNetWithMXDataIter
             var lenet = LenetSymbol();
             var argsMap = new SortedDictionary<string, NDArray>();
 
-            argsMap["data"] = new NDArray(new Shape(batchSize, 1, W, H), contest);
-            argsMap["data_label"] = new NDArray(new Shape(batchSize), contest);
+            var dataShape = new Shape(batchSize, 1, W, H);
+            var labelShape = new Shape(batchSize);
+
+            argsMap["data"] = new NDArray(dataShape, contest);
+            argsMap["data_label"] = new NDArray(labelShape, contest);
             lenet.InferArgsMap(contest, argsMap, argsMap);
 
             argsMap["fc1_w"] = new NDArray(new Shape(500, 4 * 4 * 50), contest);
@@ -38,96 +43,103 @@ namespace LeNetWithMXDataIter
             argsMap["fc2_b"] = new NDArray(new Shape(10), contest);
             argsMap["fc2_b"].Set(0);
 
-            var trainIter = new MXDataIter("MNISTIter")
-               .SetParam("image", "./mnist_data/train-images-idx3-ubyte")
-               .SetParam("label", "./mnist_data/train-labels-idx1-ubyte")
-               .SetParam("batch_size", batchSize)
-               .SetParam("shuffle", 1)
-               .SetParam("flat", 0)
-               .CreateDataIter();
-            var valIter = new MXDataIter("MNISTIter")
-               .SetParam("image", "./mnist_data/t10k-images-idx3-ubyte")
-               .SetParam("label", "./mnist_data/t10k-labels-idx1-ubyte")
-               .CreateDataIter();
+            string[] dataFiles = { "./data/mnist_data/train-images-idx3-ubyte",
+                                   "./data/mnist_data/train-labels-idx1-ubyte",
+                                   "./data/mnist_data/t10k-images-idx3-ubyte",
+                                   "./data/mnist_data/t10k-labels-idx1-ubyte"
+                                 };
 
-            var opt = OptimizerRegistry.Find("ccsgd");
-            opt.SetParam("momentum", 0.9)
-               .SetParam("rescale_grad", 1.0)
-               .SetParam("clip_gradient", 10)
-               .SetParam("lr", learningRate)
-               .SetParam("wd", weightDecay);
-
-            using (var exec = lenet.SimpleBind(contest, argsMap))
+            using (var trainIter = new MXDataIter("MNISTIter"))
             {
-                var argNames = lenet.ListArguments();
+                if (!Utils.SetDataIter(trainIter, "Train", dataFiles, batchSize))
+                    return 1;
 
-                // Create metrics
-                var trainAccuracy = new Accuracy();
-                var valAccuracy = new Accuracy();
-
-                var sw = new Stopwatch();
-                for (var iter = 0; iter < maxEpoch; ++iter)
+                using (var valIter = new MXDataIter("MNISTIter"))
                 {
-                    var samples = 0;
-                    trainIter.Reset();
-                    trainAccuracy.Reset();
+                    if (!Utils.SetDataIter(valIter, "Label", dataFiles, batchSize))
+                        return 1;
 
-                    sw.Restart();
+                    var opt = OptimizerRegistry.Find("sgd");
+                    opt.SetParam("momentum", 0.9)
+                       .SetParam("rescale_grad", 1.0)
+                       .SetParam("clip_gradient", 10)
+                       .SetParam("lr", learningRate)
+                       .SetParam("wd", weightDecay);
 
-                    while (trainIter.Next())
+                    using (var exec = lenet.SimpleBind(contest, argsMap))
                     {
-                        samples += batchSize;
-                        var dataBatch = trainIter.GetDataBatch();
+                        var argNames = lenet.ListArguments();
 
-                        dataBatch.Data.CopyTo(argsMap["data"]);
-                        dataBatch.Label.CopyTo(argsMap["data_label"]);
-                        NDArray.WaitAll();
+                        // Create metrics
+                        var trainAccuracy = new Accuracy();
+                        var valAccuracy = new Accuracy();
 
-                        // Compute gradients
-                        exec.Forward(true);
-                        exec.Backward();
-
-                        // Update parameters
-                        for (var i = 0; i < argNames.Count; ++i)
+                        var sw = new Stopwatch();
+                        for (var iter = 0; iter < maxEpoch; ++iter)
                         {
-                            if (argNames[i] == "data" || argNames[i] == "data_label")
-                                continue;
-                            opt.Update(i, exec.ArgmentArrays[i], exec.GradientArrays[i]);
+                            var samples = 0;
+                            trainIter.Reset();
+                            trainAccuracy.Reset();
+
+                            sw.Restart();
+
+                            while (trainIter.Next())
+                            {
+                                samples += batchSize;
+                                var dataBatch = trainIter.GetDataBatch();
+
+                                ResizeInput(dataBatch.Data, dataShape).CopyTo(argsMap["data"]);
+                                dataBatch.Label.CopyTo(argsMap["data_label"]);
+                                NDArray.WaitAll();
+
+                                // Compute gradients
+                                exec.Forward(true);
+                                exec.Backward();
+
+                                // Update parameters
+                                for (var i = 0; i < argNames.Count; ++i)
+                                {
+                                    if (argNames[i] == "data" || argNames[i] == "data_label")
+                                        continue;
+                                    opt.Update(i, exec.ArgmentArrays[i], exec.GradientArrays[i]);
+                                }
+
+                                // Update metric
+                                trainAccuracy.Update(dataBatch.Label, exec.Outputs[0]);
+                            }
+
+                            // one epoch of training is finished
+                            sw.Stop();
+                            var duration = sw.ElapsedMilliseconds / 1000.0;
+                            Logging.LG($"Epoch[{iter}] {samples / duration} samples/sec Train-Accuracy={trainAccuracy.Get()}");
+
+                            valIter.Reset();
+                            valAccuracy.Reset();
+
+                            var accuracy = new Accuracy();
+                            valIter.Reset();
+                            while (valIter.Next())
+                            {
+                                var dataBatch = valIter.GetDataBatch();
+                                ResizeInput(dataBatch.Data, dataShape).CopyTo(argsMap["data"]);
+                                dataBatch.Label.CopyTo(argsMap["data_label"]);
+                                NDArray.WaitAll();
+
+                                // Only forward pass is enough as no gradient is needed when evaluating
+                                exec.Forward(false);
+                                NDArray.WaitAll();
+                                accuracy.Update(dataBatch.Label, exec.Outputs[0]);
+                                valAccuracy.Update(dataBatch.Label, exec.Outputs[0]);
+                            }
+
+                            Logging.LG($"Epoch[{iter}] Val-Accuracy={valAccuracy.Get()}");
                         }
-
-                        // Update metric
-                        trainAccuracy.Update(dataBatch.Label, exec.Outputs[0]);
                     }
 
-                    // one epoch of training is finished
-                    sw.Stop();
-                    var duration = sw.ElapsedMilliseconds / 1000.0;
-                    Logging.LG($"Epoch[{iter}] {samples / duration} samples/sec Train-Accuracy={trainAccuracy.Get()}");
-
-                    valIter.Reset();
-                    valAccuracy.Reset();
-
-                    var accuracy = new Accuracy();
-                    valIter.Reset();
-                    while (valIter.Next())
-                    {
-                        var dataBatch = valIter.GetDataBatch();
-                        dataBatch.Data.CopyTo(argsMap["data"]);
-                        dataBatch.Label.CopyTo(argsMap["data_label"]);
-                        NDArray.WaitAll();
-
-                        // Only forward pass is enough as no gradient is needed when evaluating
-                        exec.Forward(false);
-                        NDArray.WaitAll();
-                        accuracy.Update(dataBatch.Label, exec.Outputs[0]);
-                        valAccuracy.Update(dataBatch.Label, exec.Outputs[0]);
-                    }
-
-                    Logging.LG($"Epoch[{iter}] Val-Accuracy={valAccuracy.Get()}");
+                    MXNet.MXNotifyShutdown();
+                    return 0;
                 }
             }
-
-            MXNet.MXNotifyShutdown();
         }
 
         #region Helpers
@@ -167,6 +179,19 @@ namespace LeNetWithMXDataIter
             Symbol lenet = Operators.SoftmaxOutput("softmax", fc2, data_label);
 
             return lenet;
+        }
+
+        private static NDArray ResizeInput(NDArray data, Shape newShape)
+        {
+            NDArray pic = data.Reshape(new Shape(0, 1, 28, 28));
+            var output = new NDArray();
+            new Operator("_contrib_BilinearResize2D")
+                .SetParam("height", newShape[2])
+                .SetParam("width", newShape[3])
+                .Function(pic)
+                .Invoke(output);
+
+            return output;
         }
 
         #endregion

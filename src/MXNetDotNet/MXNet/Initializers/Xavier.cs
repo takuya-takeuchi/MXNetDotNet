@@ -39,7 +39,7 @@ namespace MXNetDotNet
 
         #region Methods
 
-        public override void Operator(string name, NDArray array)
+        public override void Function(string name, NDArray array)
         {
             var shape = new Shape(array.GetShape());
             var hwScale = 1.0f;
